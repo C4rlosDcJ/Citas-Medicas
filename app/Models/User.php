@@ -15,6 +15,13 @@ class User extends Authenticatable
         'email',
         'password',
         'role_id',
+        'telefono',
+        'direccion',
+        'fecha_nacimiento',
+        'genero',
+        'cedula',
+        'notas',
+        'activo',
     ];
 
     protected $hidden = [
@@ -27,8 +34,15 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'fecha_nacimiento' => 'date',
+            'activo' => 'boolean',
         ];
     }
+
+    // Valor por defecto para activo
+    protected $attributes = [
+        'activo' => true,
+    ];
 
     public function role()
     {

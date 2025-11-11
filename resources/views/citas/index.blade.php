@@ -51,24 +51,25 @@
         <!-- Tarjetas de Estadísticas -->
         @if(auth()->user()->isMedico() && $citas->count() > 0)
         @php
-            // Pre-calcular las estadísticas para evitar errores
-            $citasHoy = $citas->filter(function($cita) {
+            // Calcular estadísticas desde la colección paginada
+            $citasCollection = $citas->getCollection();
+            $citasHoy = $citasCollection->filter(function($cita) {
                 return $cita->estado == 'confirmada' && $cita->fecha_hora->isToday();
             })->count();
             
-            $citasPendientes = $citas->where('estado', 'pendiente')->count();
-            $citasCompletadas = $citas->where('estado', 'completada')->count();
-            $citasCanceladas = $citas->where('estado', 'cancelada')->count();
+            $citasPendientes = $citasCollection->where('estado', 'pendiente')->count();
+            $citasCompletadas = $citasCollection->where('estado', 'completada')->count();
+            $citasCanceladas = $citasCollection->where('estado', 'cancelada')->count();
             
-            $proximasCitasCount = $citas->filter(function($cita) {
+            $proximasCitasCount = $citasCollection->filter(function($cita) {
                 return $cita->fecha_hora >= now() && in_array($cita->estado, ['pendiente', 'confirmada']);
             })->count();
             
-            $proximaCita = $citas->filter(function($cita) {
+            $proximaCita = $citasCollection->filter(function($cita) {
                 return $cita->fecha_hora >= now() && in_array($cita->estado, ['pendiente', 'confirmada']);
             })->sortBy('fecha_hora')->first();
             
-            $pacientesAtendidosHoy = $citas->filter(function($cita) {
+            $pacientesAtendidosHoy = $citasCollection->filter(function($cita) {
                 return $cita->estado == 'completada' && $cita->fecha_hora->isToday();
             })->count();
         @endphp
@@ -132,43 +133,49 @@
         </div>
         @endif
 
-        <!-- Filtros -->
+        <!-- Filtros Compactos -->
         <div class="bg-white p-4 rounded-lg shadow-sm mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <form method="GET" action="{{ route('citas.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <!-- Filtro Estado -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                    <select id="filter_estado" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                        <option value="">Todos los estados</option>
-                        <option value="pendiente">Pendiente</option>
-                        <option value="confirmada">Confirmada</option>
-                        <option value="completada">Completada</option>
-                        <option value="cancelada">Cancelada</option>
+                    <select name="estado" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <option value="">Todos</option>
+                        <option value="pendiente" {{ request('estado') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
+                        <option value="confirmada" {{ request('estado') == 'confirmada' ? 'selected' : '' }}>Confirmada</option>
+                        <option value="completada" {{ request('estado') == 'completada' ? 'selected' : '' }}>Completada</option>
+                        <option value="cancelada" {{ request('estado') == 'cancelada' ? 'selected' : '' }}>Cancelada</option>
                     </select>
                 </div>
                 
+                <!-- Filtro Fecha -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                    <input type="date" id="filter_fecha" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                    <input type="date" name="fecha" value="{{ request('fecha') }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                 </div>
                 
-                @if(auth()->user()->isAdmin())
+                <!-- Filtro Nombre -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Médico</label>
-                    <select class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                        <option value="">Todos los médicos</option>
-                        <!-- Opciones de médicos -->
-                    </select>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        @if(auth()->user()->isMedico() || auth()->user()->isAdmin())
+                            Paciente
+                        @else
+                            Médico
+                        @endif
+                    </label>
+                    <input type="text" name="nombre" value="{{ request('nombre') }}" placeholder="Buscar por nombre..." class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                 </div>
-                @else
-                <div></div>
-                @endif
                 
-                <div class="flex items-end">
-                    <button onclick="filtrarCitas()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                <!-- Botones -->
+                <div class="flex items-end space-x-2">
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-semibold transition duration-300 flex items-center justify-center">
                         <i class="fas fa-filter mr-2"></i>Filtrar
                     </button>
+                    <a href="{{ route('citas.index') }}" class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md font-medium transition duration-300 flex items-center justify-center" title="Limpiar filtros">
+                        <i class="fas fa-eraser"></i>
+                    </a>
                 </div>
-            </div>
+            </form>
         </div>
 
         <!-- Lista de Citas -->
@@ -204,9 +211,9 @@
                                 </th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200" id="citas-table-body">
+                        <tbody class="bg-white divide-y divide-gray-200">
                             @foreach($citas as $cita)
-                            <tr class="hover:bg-gray-50 transition duration-300" data-estado="{{ $cita->estado }}" data-fecha="{{ $cita->fecha_hora->format('Y-m-d') }}">
+                            <tr class="hover:bg-gray-50 transition duration-300">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <div class="bg-blue-100 p-2 rounded-lg mr-3">
@@ -400,28 +407,71 @@
                 <!-- Información de la tabla -->
                 <div class="bg-gray-50 px-6 py-3 border-t border-gray-200">
                     <div class="flex justify-between items-center">
-                        <p class="text-sm text-gray-700">
-                            Mostrando <span class="font-medium">{{ $citas->count() }}</span> 
-                            @if($citas->count() === 1) cita @else citas @endif
-                        </p>
-                        
-                        @if(auth()->user()->isMedico() || auth()->user()->isAdmin())
-                        <div class="flex space-x-4 text-sm text-gray-600">
-                            @php
-                                $estados = $citas->groupBy('estado');
-                            @endphp
-                            @foreach($estados as $estado => $citasEstado)
-                                <span class="inline-flex items-center">
-                                    <span class="w-3 h-3 rounded-full 
-                                        @if($estado == 'pendiente') bg-yellow-400
-                                        @elseif($estado == 'confirmada') bg-blue-400
-                                        @elseif($estado == 'completada') bg-green-400
-                                        @else bg-red-400 @endif mr-2"></span>
-                                    {{ ucfirst($estado) }}: <span class="font-medium ml-1">{{ $citasEstado->count() }}</span>
-                                </span>
-                            @endforeach
+                        <div class="flex items-center space-x-4">
+                            <p class="text-sm text-gray-700">
+                                Mostrando <span class="font-medium">{{ $citas->count() }}</span> 
+                                de <span class="font-medium">{{ $citas->total() }}</span> citas
+                            </p>
+                            
+                            @if(auth()->user()->isMedico() || auth()->user()->isAdmin())
+                            <div class="flex space-x-4 text-sm text-gray-600">
+                                @php
+                                    $estados = $citas->getCollection()->groupBy('estado');
+                                @endphp
+                                @foreach($estados as $estado => $citasEstado)
+                                    <span class="inline-flex items-center">
+                                        <span class="w-3 h-3 rounded-full 
+                                            @if($estado == 'pendiente') bg-yellow-400
+                                            @elseif($estado == 'confirmada') bg-blue-400
+                                            @elseif($estado == 'completada') bg-green-400
+                                            @else bg-red-400 @endif mr-2"></span>
+                                        {{ ucfirst($estado) }}: <span class="font-medium ml-1">{{ $citasEstado->count() }}</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                            @endif
                         </div>
-                        @endif
+                        
+                        <!-- Paginación -->
+                        <div class="flex items-center space-x-2">
+                            @if($citas->hasPages())
+                            <div class="flex items-center space-x-1 bg-white rounded-lg border border-gray-200 p-1 shadow-sm">
+                                @if($citas->onFirstPage())
+                                <span class="px-3 py-1 text-gray-400 cursor-not-allowed rounded-md">
+                                    <i class="fas fa-chevron-left mr-1"></i>
+                                </span>
+                                @else
+                                <a href="{{ $citas->previousPageUrl() }}" class="px-3 py-1 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-md transition duration-300 flex items-center">
+                                    <i class="fas fa-chevron-left mr-1"></i>
+                                </a>
+                                @endif
+
+                                <div class="flex space-x-1">
+                                    @foreach($citas->getUrlRange(1, $citas->lastPage()) as $page => $url)
+                                        @if($page == $citas->currentPage())
+                                        <span class="px-3 py-1 bg-blue-600 text-white rounded-md font-medium">
+                                            {{ $page }}
+                                        </span>
+                                        @else
+                                        <a href="{{ $url }}" class="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded-md transition duration-300">
+                                            {{ $page }}
+                                        </a>
+                                        @endif
+                                    @endforeach
+                                </div>
+
+                                @if($citas->hasMorePages())
+                                <a href="{{ $citas->nextPageUrl() }}" class="px-3 py-1 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-md transition duration-300 flex items-center">
+                                    <i class="fas fa-chevron-right ml-1"></i>
+                                </a>
+                                @else
+                                <span class="px-3 py-1 text-gray-400 cursor-not-allowed rounded-md">
+                                    <i class="fas fa-chevron-right ml-1"></i>
+                                </span>
+                                @endif
+                            </div>
+                            @endif
+                        </div>
                     </div>
                 </div>
             @else
@@ -498,42 +548,9 @@
 
 @push('scripts')
 <script>
-    function filtrarCitas() {
-        const estado = document.getElementById('filter_estado').value;
-        const fecha = document.getElementById('filter_fecha').value;
-        const filas = document.querySelectorAll('#citas-table-body tr');
-        let citasVisibles = 0;
-        
-        filas.forEach(fila => {
-            let mostrar = true;
-            
-            // Filtrar por estado
-            if (estado && fila.dataset.estado !== estado) {
-                mostrar = false;
-            }
-            
-            // Filtrar por fecha
-            if (fecha && fila.dataset.fecha !== fecha) {
-                mostrar = false;
-            }
-            
-            fila.style.display = mostrar ? '' : 'none';
-            if (mostrar) citasVisibles++;
-        });
-
-        // Actualizar contador
-        const contador = document.querySelector('.text-sm.text-gray-700');
-        if (contador) {
-            contador.innerHTML = `Mostrando <span class="font-medium">${citasVisibles}</span> ${citasVisibles === 1 ? 'cita' : 'citas'}`;
-        }
-    }
-
-    // Filtrar automáticamente cuando cambien los selects
-    document.getElementById('filter_estado').addEventListener('change', filtrarCitas);
-    document.getElementById('filter_fecha').addEventListener('change', filtrarCitas);
-
-    // Mostrar confirmación antes de acciones importantes
     document.addEventListener('DOMContentLoaded', function() {
+        
+        // Mostrar confirmación antes de acciones importantes
         const forms = document.querySelectorAll('form');
         forms.forEach(form => {
             if (form.action.includes('update-status')) {
@@ -559,53 +576,14 @@
                 });
             }
         });
-    });
 
-    // Inicializar filtros si hay valores en la URL
-    document.addEventListener('DOMContentLoaded', function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const estado = urlParams.get('estado');
-        const fecha = urlParams.get('fecha');
-        
-        if (estado) {
-            document.getElementById('filter_estado').value = estado;
-        }
-        if (fecha) {
-            document.getElementById('filter_fecha').value = fecha;
-        }
-        
-        if (estado || fecha) {
-            setTimeout(filtrarCitas, 100);
-        }
-    });
-
-    // Mostrar tooltips
-    document.addEventListener('DOMContentLoaded', function() {
+        // Tooltips básicos
         const elementsWithTitle = document.querySelectorAll('[title]');
         elementsWithTitle.forEach(element => {
             element.addEventListener('mouseenter', function(e) {
                 const title = this.getAttribute('title');
                 if (title) {
-                    const tooltip = document.createElement('div');
-                    tooltip.className = 'fixed z-50 px-2 py-1 text-sm text-white bg-gray-900 rounded shadow-lg';
-                    tooltip.textContent = title;
-                    document.body.appendChild(tooltip);
-                    
-                    const rect = this.getBoundingClientRect();
-                    tooltip.style.left = (rect.left + window.scrollX) + 'px';
-                    tooltip.style.top = (rect.top + window.scrollY - tooltip.offsetHeight - 5) + 'px';
-                    
-                    this.setAttribute('data-tooltip', tooltip);
-                    this.removeAttribute('title');
-                }
-            });
-            
-            element.addEventListener('mouseleave', function() {
-                const tooltip = this.getAttribute('data-tooltip');
-                if (tooltip) {
-                    document.body.removeChild(tooltip);
-                    this.setAttribute('title', this.textContent);
-                    this.removeAttribute('data-tooltip');
+                    // Tooltip simple nativo del navegador
                 }
             });
         });

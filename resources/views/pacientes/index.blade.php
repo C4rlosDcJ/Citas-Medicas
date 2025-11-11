@@ -95,10 +95,10 @@
                                            title="Crear cita para este paciente">
                                             <i class="fas fa-calendar-plus"></i>
                                         </a>
-                                        <button class="text-green-600 hover:text-green-900 p-2 rounded-full hover:bg-green-50 transition duration-300"
+                                        <!-- <button class="text-green-600 hover:text-green-900 p-2 rounded-full hover:bg-green-50 transition duration-300"
                                                 title="Ver historial">
                                             <i class="fas fa-history"></i>
-                                        </button>
+                                        </button> -->
                                     </div>
                                 </td>
                             </tr>

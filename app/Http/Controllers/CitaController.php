@@ -11,18 +11,50 @@ use Illuminate\Support\Facades\Log;
 
 class CitaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
-        $citas = [];
+        $query = Cita::query();
 
+        // Aplicar filtros según el rol del usuario
         if ($user->isPaciente() && $user->paciente) {
-            $citas = $user->paciente->citas()->with('medico.user', 'medico.especialidad')->get();
+            $query->where('paciente_id', $user->paciente->id);
         } elseif ($user->isMedico() && $user->medico) {
-            $citas = $user->medico->citas()->with('paciente.user')->get();
-        } elseif ($user->isAdmin()) {
-            $citas = Cita::with('paciente.user', 'medico.user', 'medico.especialidad')->get();
+            $query->where('medico_id', $user->medico->id);
         }
+
+        // Cargar relaciones necesarias
+        $query->with(['paciente.user', 'medico.user', 'medico.especialidad']);
+
+        // Aplicar filtros
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
+
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha_hora', $request->fecha);
+        }
+
+        if ($request->filled('nombre')) {
+            $search = $request->nombre;
+            if ($user->isMedico() || $user->isAdmin()) {
+                // Buscar por nombre de paciente
+                $query->whereHas('paciente.user', function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                });
+            } elseif ($user->isPaciente()) {
+                // Buscar por nombre de médico
+                $query->whereHas('medico.user', function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                });
+            }
+        }
+
+        // Ordenar por fecha más reciente
+        $query->orderBy('fecha_hora', 'desc');
+
+        // Paginación
+        $citas = $query->paginate(5)->withQueryString();
 
         return view('citas.index', compact('citas'));
     }
@@ -32,13 +64,11 @@ class CitaController extends Controller
         $especialidades = Especialidad::all();
         $medicos = Medico::with('user', 'especialidad')->get();
         
-        // Si es médico, solo puede crear citas para sus pacientes
         $medicoId = null;
         if (auth()->user()->isMedico()) {
             $medicoId = auth()->user()->medico->id;
         }
 
-        // Obtener pacientes para médicos y admin
         $pacientes = [];
         if (auth()->user()->isMedico() || auth()->user()->isAdmin()) {
             $pacientes = Paciente::with('user')->get();
@@ -51,7 +81,6 @@ class CitaController extends Controller
     {
         $user = auth()->user();
         
-        // Validaciones base
         $request->validate([
             'medico_id' => 'required|exists:medicos,id',
             'fecha_hora' => 'required|date|after:now',
@@ -60,15 +89,12 @@ class CitaController extends Controller
             'duracion' => 'required|in:30,45,60,90,120',
         ]);
 
-        // Determinar el paciente_id según el rol
         if ($user->isPaciente()) {
-            // Paciente crea cita para sí mismo
             if (!$user->paciente) {
                 return redirect()->back()->with('error', 'No se encontró perfil de paciente.');
             }
             $pacienteId = $user->paciente->id;
         } elseif ($user->isMedico() || $user->isAdmin()) {
-            // Médico o admin crea cita para un paciente específico
             $request->validate([
                 'paciente_id' => 'required|exists:pacientes,id',
             ]);
@@ -77,17 +103,16 @@ class CitaController extends Controller
             return redirect()->back()->with('error', 'No tienes permisos para crear citas.');
         }
 
-        // Verificar disponibilidad del médico
+        // Verificar disponibilidad
         $citaExistente = Cita::where('medico_id', $request->medico_id)
             ->where('fecha_hora', $request->fecha_hora)
             ->whereIn('estado', ['pendiente', 'confirmada'])
             ->exists();
 
         if ($citaExistente) {
-            return redirect()->back()->with('error', 'El médico ya tiene una cita programada en ese horario. Por favor, elige otro horario.');
+            return redirect()->back()->with('error', 'El médico ya tiene una cita programada en ese horario.');
         }
 
-        // Crear la cita
         Cita::create([
             'paciente_id' => $pacienteId,
             'medico_id' => $request->medico_id,
@@ -114,7 +139,6 @@ class CitaController extends Controller
 
     public function show(Cita $cita)
     {
-        // Verificar que el usuario tiene permiso para ver esta cita
         if (auth()->user()->isPaciente() && auth()->user()->paciente->id !== $cita->paciente_id) {
             abort(403, 'No tienes permiso para ver esta cita.');
         }
@@ -128,7 +152,6 @@ class CitaController extends Controller
 
     public function edit(Cita $cita)
     {
-        // Verificar que el usuario es médico y tiene permiso para editar esta cita
         if (auth()->user()->isMedico() && auth()->user()->medico->id !== $cita->medico_id) {
             abort(403, 'No tienes permiso para editar esta cita.');
         }
@@ -139,18 +162,12 @@ class CitaController extends Controller
 
     public function updateMedical(Request $request, Cita $cita)
     {
-        // Debug inicial
-        Log::info('=== INICIANDO ACTUALIZACIÓN MÉDICA ===');
-        Log::info('Cita ID: ' . $cita->id);
-        Log::info('Datos recibidos:', $request->all());
-        Log::info('Action: ' . $request->input('action', 'NO RECIBIDO'));
+        Log::info('Actualizando información médica para cita: ' . $cita->id);
 
-        // Verificar permisos
         if (auth()->user()->isMedico() && auth()->user()->medico->id !== $cita->medico_id) {
             abort(403, 'No tienes permiso para actualizar esta cita.');
         }
 
-        // Validaciones
         $request->validate([
             'temperatura' => 'nullable|numeric|min:35|max:42',
             'presion_arterial_sistolica' => 'nullable|integer|min:60|max:250',
@@ -171,10 +188,8 @@ class CitaController extends Controller
         $imc = null;
         if ($request->peso && $request->altura && $request->altura > 0) {
             $imc = $request->peso / ($request->altura * $request->altura);
-            Log::info('IMC calculado: ' . $imc);
         }
 
-        // Preparar datos
         $datosActualizacion = [
             'diagnostico' => $request->diagnostico,
             'tratamiento' => $request->tratamiento,
@@ -194,32 +209,22 @@ class CitaController extends Controller
         ];
 
         try {
-            Log::info('Actualizando cita con datos:', $datosActualizacion);
-
-            // Actualizar información médica
             $cita->update($datosActualizacion);
-            Log::info('✅ Información médica actualizada');
 
             // Manejar acción del botón
             $action = $request->input('action');
             
             if ($action === 'completar') {
                 $cita->update(['estado' => 'completada']);
-                Log::info('✅ Cita marcada como COMPLETADA');
-                
                 return redirect()->route('citas.show', $cita)
                     ->with('success', 'Información médica guardada y cita completada exitosamente.');
-            
             } else {
-                Log::info('✅ Solo se guardó información médica');
                 return redirect()->route('citas.show', $cita)
                     ->with('success', 'Información médica guardada correctamente.');
             }
 
         } catch (\Exception $e) {
-            Log::error('❌ Error al actualizar cita: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
-            
+            Log::error('Error al actualizar cita: ' . $e->getMessage());
             return redirect()->back()
                 ->with('error', 'Error al guardar la información: ' . $e->getMessage())
                 ->withInput();
@@ -261,7 +266,6 @@ class CitaController extends Controller
 
     public function destroy(Cita $cita)
     {
-        // Solo admin puede eliminar citas
         if (!auth()->user()->isAdmin()) {
             abort(403, 'No tienes permisos para eliminar citas.');
         }

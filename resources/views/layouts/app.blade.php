@@ -85,11 +85,9 @@
                         @endif
 
                         @if(auth()->user()->isAdmin())
-                        <a href="#" 
-                           class="nav-link flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-200">
-                            <i class="fas fa-cogs"></i>
-                            <span class="font-medium">Administración</span>
-                        </a>
+                            <a href="{{ route('users.index') }}" class=" hover:bg-blue-500 px-3 py-2 rounded-md transition duration-300 flex items-center">
+                                <i class="fas fa-users-cog mr-1"></i>Usuarios
+                            </a>
                         @endif
                     </div>
                 </div>
@@ -122,11 +120,6 @@
                                 @endif
                             </span>
                         </span>
-                        
-                        <div class="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-lg">
-                            <i class="fas fa-user text-gray-600 text-sm"></i>
-                            <span class="text-sm font-medium text-gray-700">{{ auth()->user()->name }}</span>
-                        </div>
                     </div>
 
                     <!-- Logout -->
@@ -206,13 +199,6 @@
                 </a>
                 @endif
 
-                @if(auth()->user()->isAdmin())
-                <a href="#" 
-                   class="flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-200">
-                    <i class="fas fa-cogs w-5"></i>
-                    <span class="font-medium">Administración</span>
-                </a>
-                @endif
             </div>
         </div>
     </nav>
@@ -336,14 +322,13 @@
     </footer>
     @endauth
 
-    <!-- Notification Container -->
     <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     @stack('scripts')
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Mobile menu toggle
+
             const mobileMenuButton = document.getElementById('mobile-menu-button');
             const mobileMenu = document.getElementById('mobile-menu');
             
@@ -356,7 +341,6 @@
                 });
             }
 
-            // Highlight active nav link
             const currentPath = window.location.pathname;
             const navLinks = document.querySelectorAll('.nav-link');
             navLinks.forEach(link => {
@@ -365,7 +349,6 @@
                 }
             });
 
-            // Show flash notifications
             @if(session('success'))
                 showNotification('{{ session('success') }}', 'success');
             @endif
@@ -374,7 +357,6 @@
                 showNotification('{{ session('error') }}', 'error');
             @endif
 
-            // Confirmation dialogs
             document.querySelectorAll('form[data-confirm]').forEach(form => {
                 form.addEventListener('submit', function(e) {
                     const message = this.getAttribute('data-confirm');
@@ -418,7 +400,6 @@
 
             container.appendChild(notification);
 
-            // Auto remove after 5 seconds
             setTimeout(() => {
                 removeNotification(notification);
             }, 5000);
@@ -435,26 +416,22 @@
     </script>
 
     <style>
-        /* Smooth transitions */
         * {
             transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
             transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
             transition-duration: 150ms;
         }
 
-        /* Smooth scroll */
         html {
             scroll-behavior: smooth;
         }
 
-        /* Focus styles */
         button:focus, a:focus, input:focus, select:focus, textarea:focus {
             outline: 2px solid #3b82f6;
             outline-offset: 2px;
             border-radius: 0.375rem;
         }
 
-        /* Enhanced table styles */
         table {
             border-collapse: separate;
             border-spacing: 0;
@@ -467,13 +444,11 @@
             z-index: 10;
         }
 
-        /* Input focus states */
         input:focus, select:focus, textarea:focus {
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        /* Loading state */
         .loading {
             opacity: 0.6;
             pointer-events: none;
@@ -498,7 +473,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
